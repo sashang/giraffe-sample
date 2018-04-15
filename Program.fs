@@ -1,11 +1,13 @@
-module giraffe_sample.App
+module GiraffeSample.App
 
 open System
 open System.IO
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Cors.Infrastructure
 open Microsoft.AspNetCore.Hosting
+open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Giraffe
 
@@ -49,6 +51,16 @@ module Views =
 // Web app
 // ---------------------------------
 
+let nameByIndex (idx : string) =
+    fun (next : HttpFunc) (ctx : HttpContext) ->
+        let config = ctx.GetService<IConfiguration>()        
+        let name = config.Item("user:" + idx + ":value")
+        let greetings = sprintf "Hello %s, from Giraffe!" name
+        let model     = { Text = greetings }
+        let view = Views.index model
+        htmlView view next ctx
+        
+
 let indexHandler (name : string) =
     let greetings = sprintf "Hello %s, from Giraffe!" name
     let model     = { Text = greetings }
@@ -60,6 +72,7 @@ let webApp =
         GET >=>
             choose [
                 route "/" >=> indexHandler "world"
+                routef "/nameByIndex/%s" nameByIndex
                 routef "/hello/%s" indexHandler
             ]
         setStatusCode 404 >=> text "Not Found" ]
@@ -99,6 +112,9 @@ let configureLogging (builder : ILoggingBuilder) =
     let filter (l : LogLevel) = l.Equals LogLevel.Error
     builder.AddFilter(filter).AddConsole().AddDebug() |> ignore
 
+let buildConfig (builder : IConfigurationBuilder) =
+    builder.AddXmlFile("settings.xml") |> ignore
+
 [<EntryPoint>]
 let main _ =
     let contentRoot = Directory.GetCurrentDirectory()
@@ -108,6 +124,7 @@ let main _ =
         .UseContentRoot(contentRoot)
         .UseIISIntegration()
         .UseWebRoot(webRoot)
+        .ConfigureAppConfiguration(buildConfig)
         .Configure(Action<IApplicationBuilder> configureApp)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
